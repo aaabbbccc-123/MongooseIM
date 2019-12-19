@@ -46,7 +46,8 @@ do_leave() ->
                              catch mnesia:stop(),
                              detach_nodes(mnesia_nodes()),
                              delete_mnesia(),
-                             ok = mnesia:start()
+                             ok = mnesia:start(),
+			     mnesia_rocksdb:register()
                      end).
 
 %% @doc Remove dead node from the cluster.
@@ -91,6 +92,7 @@ check_networking(ClusterMember) ->
 unsafe_join(Node, ClusterMember) ->
     delete_mnesia(),
     ok = mnesia:start(),
+    mnesia_rocksdb:register(),
     set_extra_db_nodes(ClusterMember),
     true = lists:member(ClusterMember, mnesia:system_info(running_db_nodes)),
     ok = change_schema_type(Node),

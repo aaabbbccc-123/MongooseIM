@@ -114,7 +114,8 @@ db_init() ->
         [] ->
             application:stop(mnesia),
             mnesia:create_schema([node()]),
-            application:start(mnesia, permanent);
+            application:start(mnesia, permanent),
+	    mnesia_rocksdb:register();
         _ ->
             ok
     end,

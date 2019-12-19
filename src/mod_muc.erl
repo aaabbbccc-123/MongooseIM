@@ -612,6 +612,7 @@ route_by_nick(_Nick, {From, To, Acc, Packet}, _State) ->
 -spec route_by_type(binary(), from_to_packet(), state()) -> 'ok' | pid().
 route_by_type(<<"iq">>, {From, To, Acc, Packet}, #state{host = Host} = State) ->
     ServerHost = State#state.server_host,
+
     case jlib:iq_query_info(Packet) of
         #iq{type = get, xmlns = ?NS_DISCO_INFO = XMLNS, lang = Lang} = IQ ->
             Info = ejabberd_hooks:run_fold(disco_info, ServerHost, [],
@@ -619,7 +620,7 @@ route_by_type(<<"iq">>, {From, To, Acc, Packet}, #state{host = Host} = State) ->
             Res = IQ#iq{type = result,
                         sub_el = [#xmlel{name = <<"query">>,
                                          attrs = [{<<"xmlns">>, XMLNS}],
-                                         children = iq_disco_info(Lang) ++ Info}]},
+                                         children = iq_disco_info(Lang, To) ++ Info}]},
             ejabberd_router:route(To, From, jlib:iq_to_xml(Res));
         #iq{type = get, xmlns = ?NS_DISCO_ITEMS} = IQ ->
             spawn(?MODULE, process_iq_disco_items, [Host, From, To, IQ]);
@@ -793,8 +794,9 @@ room_jid_to_pid(#jid{luser=RoomName, lserver=MucService}) ->
 -spec default_host() -> binary().
 default_host() -> <<"conference.@HOST@">>.
 
--spec iq_disco_info(ejabberd:lang()) -> [exml:element(), ...].
-iq_disco_info(Lang) ->
+-spec iq_disco_info(ejabberd:lang(), jid:jid()) -> [exml:element(), ...].
+iq_disco_info(Lang, To) ->
+    {result, RegisteredFeatures} = mod_disco:get_local_features(empty, To, To, <<>>, <<>>),
     [#xmlel{name = <<"identity">>,
             attrs = [{<<"category">>, <<"conference">>},
                      {<<"type">>, <<"text">>},
@@ -805,7 +807,8 @@ iq_disco_info(Lang) ->
      #xmlel{name = <<"feature">>, attrs = [{<<"var">>, ?NS_MUC_UNIQUE}]},
      #xmlel{name = <<"feature">>, attrs = [{<<"var">>, ?NS_REGISTER}]},
      #xmlel{name = <<"feature">>, attrs = [{<<"var">>, ?NS_RSM}]},
-     #xmlel{name = <<"feature">>, attrs = [{<<"var">>, ?NS_VCARD}]}].
+     #xmlel{name = <<"feature">>, attrs = [{<<"var">>, ?NS_VCARD}]}] ++
+    [#xmlel{name = <<"feature">>, attrs = [{<<"var">>, URN}]} || {{URN, _Host}} <- RegisteredFeatures].
 
 
 -spec iq_disco_items(jid:server(), jid:jid(), ejabberd:lang(),

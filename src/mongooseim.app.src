@@ -49,7 +49,10 @@
                   xmerl,
                   worker_pool,
                   gen_fsm_compat,
-                  erl_csv_generator
+                  erl_csv_generator,
+		  sext,
+		  mnesia_rocksdb,
+		  base64url
                  ]},
   {env, []},
   {mod, {ejabberd_app, []}}]}.

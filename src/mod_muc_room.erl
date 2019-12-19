@@ -290,6 +290,7 @@ init([Host, ServerHost, Access, Room, HistorySize, RoomShaper, HttpAuthPool,
     State1 = set_opts(DefRoomOpts, State),
     ?INFO_MSG("Created MUC room ~s@~s by ~s",
               [Room, Host, jid:to_binary(Creator)]),
+
     add_to_log(room_existence, created, State1),
     case proplists:get_value(instant, DefRoomOpts, false) of
         true ->
@@ -660,7 +661,7 @@ maybe_prepare_room_queue(RoomQueue, StateData) ->
             next_normal_state(StateData1)
     end.
 
--type info_msg() :: {process_user_presence | process_user_message, jid:jid()}
+-type info_msg() :: {process_user_presence | process_user_message | stop_persistent_room_process , jid:jid()}
                     | process_room_queue.
 -spec handle_info(info_msg(), statename(), state()) -> fsm_return().
 handle_info({process_user_presence, From}, normal_state = _StateName, StateData) ->
@@ -3951,18 +3952,22 @@ config_opt_to_feature(Opt, Fiftrue, Fiffalse) ->
     end.
 
 
--spec process_iq_disco_info(jid:jid(), 'get' | 'set', ejabberd:lang(),
+-spec process_iq_disco_info(jid:jid(), jid:jid(), 'get' | 'set', ejabberd:lang(),
                             state()) -> {'error', exml:element()}
                                       | {'result', [exml:element(), ...], state()}.
-process_iq_disco_info(_From, set, _Lang, _StateData) ->
+process_iq_disco_info(_From, _To, set, _Lang, _StateData) ->
     {error, mongoose_xmpp_errors:not_allowed()};
-process_iq_disco_info(_From, get, Lang, StateData) ->
+process_iq_disco_info(_From, To, get, Lang, StateData) ->
     Config = StateData#state.config,
+
+    {result, RegisteredFeatures} = mod_disco:get_local_features(empty, To, To, <<>>, <<>>),
+
     {result, [#xmlel{name = <<"identity">>,
                      attrs = [{<<"category">>, <<"conference">>},
                           {<<"type">>, <<"text">>},
                           {<<"name">>, get_title(StateData)}]},
               #xmlel{name = <<"feature">>, attrs = [{<<"var">>, ?NS_MUC}]},
+
               config_opt_to_feature((Config#config.public),
                          <<"muc_public">>, <<"muc_hidden">>),
               config_opt_to_feature((Config#config.persistent),
@@ -3975,8 +3980,8 @@ process_iq_disco_info(_From, get, Lang, StateData) ->
                          <<"muc_moderated">>, <<"muc_unmoderated">>),
               config_opt_to_feature((Config#config.password_protected),
                          <<"muc_passwordprotected">>, <<"muc_unsecured">>)
-             ] ++ iq_disco_info_extras(Lang, StateData), StateData}.
-
+	     ] ++ [#xmlel{name = <<"feature">>, attrs = [{<<"var">>, URN}]} || {{URN, _Host}} <- RegisteredFeatures] ++
+             iq_disco_info_extras(Lang, StateData), StateData}.
 
 -spec rfieldt(binary(), binary(), binary()) -> exml:element().
 rfieldt(Type, Var, Val) ->
@@ -4605,8 +4610,8 @@ route_iq(Acc, #routed_iq{iq = #iq{type = Type, xmlns = ?NS_MUC_OWNER, lang = Lan
     Res = process_iq_owner(From, Type, Lang, SubEl, StateData, normal_state),
     do_route_iq(Acc, Res, Routed, StateData);
 route_iq(Acc, #routed_iq{iq = #iq{type = Type, xmlns = ?NS_DISCO_INFO, lang = Lang},
-    from = From} = Routed, StateData) ->
-    Res = process_iq_disco_info(From, Type, Lang, StateData),
+    from = From} = Routed, #state{jid = RoomJID} = StateData) ->
+    Res = process_iq_disco_info(From, RoomJID, Type, Lang, StateData),
     do_route_iq(Acc, Res, Routed, StateData);
 route_iq(Acc, #routed_iq{iq = #iq{type = Type, xmlns = ?NS_DISCO_ITEMS, lang = Lang},
     from = From} = Routed, StateData) ->

@@ -44,13 +44,13 @@
 
 init(_Host, _Opts) ->
     mnesia:create_table(muc_room,
-                        [{disc_copies, [node()]},
+                        [{rocksdb_copies, [node()]},
                          {attributes, record_info(fields, muc_room)}]),
     mnesia:create_table(muc_registered,
-                        [{disc_copies, [node()]},
+                        [{rocksdb_copies, [node()]},
                          {attributes, record_info(fields, muc_registered)}]),
-    mnesia:add_table_copy(muc_room, node(), disc_copies),
-    mnesia:add_table_copy(muc_registered, node(), disc_copies),
+    mnesia:add_table_copy(muc_room, node(), rocksdb_copies),
+    mnesia:add_table_copy(muc_registered, node(), rocksdb_copies),
     mnesia:add_table_index(muc_registered, nick),
     ok.
 
